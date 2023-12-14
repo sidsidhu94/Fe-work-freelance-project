@@ -106,7 +106,7 @@ WSGI_APPLICATION = 'fework.wsgi.application'
 DATABASES = {
    'default': {
        'ENGINE': 'django.db.backends.postgresql',
-       'NAME': 'fework',
+       'NAME': 'feworks',
        'USER': 'postgres',
        'PASSWORD': 'sidharth',
        'HOST': 'localhost',
@@ -207,9 +207,16 @@ cloudinary.config(
 ASGI_APPLICATION = "fework.asgi.application"
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [("127.0.0.1", 6379)],
+#         },
+#     },
+# }
+
+AUTH_USER_MODEL = 'account.UserAccount'
