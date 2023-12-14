@@ -1,5 +1,5 @@
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import render,get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -17,22 +17,28 @@ import string
 from django.core.mail import  BadHeaderError
 from django.conf import settings
 from smtplib import SMTPException
-from django.db.models import Q,Subquery,OuterRef
+from django.db.models import Q,Subquery,OuterRef,Count
 import cloudinary
 import cloudinary.uploader
 from rest_framework import generics
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 
+import razorpay
+from .main import RazorpayClient
+rz_client = RazorpayClient()
 
 import smtplib
 from email.message import EmailMessage
 
-from .models import UserAccount,Userprofile,Userwork,ChatMessage
+from .models import UserAccount,Userprofile,Userwork,ChatMessage,UserConnection,WorkAppreciation
+from .models import PremiumMembership as PremiumMembershipModel
 
 User = UserAccount
 
-from .serializer import  UserCreateSerializer, UserSerializer,OTPVerificationSerializer,ImageSerializer,UserprofileSerializer
+from .serializer import  UserCreateSerializer, UserSerializer,OTPVerificationSerializer,ImageSerializer,UserprofileSerializer,ChatMessageSerializer,WorkAppreciationSerializer,TransactionSerializer
 
-from .serializer import UserWorkSerializer,WorkImageSerializer,UserWorksSerializer,MessageSerializer
+from .serializer import UserWorkSerializer,WorkImageSerializer,UserWorksSerializer,MessageSerializer,UserConnectionSerializer,UserprofilesSerializer,WorkscommentsSerializer,PremiumMembership,UserMessageprofileSerializer
 # from .serializer import ,UserAccountSerializer
 # from .emails import sent_otp_via_email
 # Create your views here.
@@ -156,14 +162,17 @@ class LoginUser(APIView):
     
 
     def post(self,request):
+        
         print("rferhfbejrhkfberhj")
         if request.method =="POST":
             email =request.data['email']
+            
             password = request.data['password']
 
             print(email,password)
 
-            user = User.objects.filter(email = email).first()
+            user = UserAccount.objects.filter(email = email).first()
+            print(user)
 
             if user is None or user.delete == True or user.is_active == False:
                 return Response({"message":"Not a registered user"})
@@ -243,8 +252,10 @@ class LoginAdmin(APIView):
         return response
 
 class UserView(APIView):
+   
     
     def get(self,request):
+       
         users = User.objects.filter(is_admin = False,delete = False)
         serialized_users = [{'id' : user.id , 'username': user.firstname, 'email': user.email, 'phonenumber' : user.phonenumber} for user in users]
         
@@ -365,15 +376,7 @@ class ProfileView(APIView):
 
         print(urls,"...............here")
 
-        # urls = result['urls']
-
-        # print(urls,".............................this")
-        # urls = result.url
-
-        # print(urls,".............................this")
-        
        
-        # print(user.id,"kjwefhiuwlfkhrelkjferifulherfiuehrf")
 
         
      
@@ -406,11 +409,59 @@ class ProfileView(APIView):
         else:
             print(serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    def put(self, request):
+        return self.update_profile(request)
+
+    # def patch(self, request):
+    #     return self.update_profile(request)
+
+    def patch(self, request):
+        user_id = request.data.get('userId')
+
+        try:
+            user = UserAccount.objects.get(pk=user_id)
+        except UserAccount.DoesNotExist:
+            return Response({'error': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Extract updated data from the request
+        profile_pic = request.data.get('profile_image')
+        username = request.data.get('username')
+        country = request.data.get('country')
+        description = request.data.get('description')
+        skills = request.data.get('skills')
+
+        # Update fields if they are provided
+        if profile_pic:
+            result = cloudinary.uploader.upload(profile_pic)
+            urls = result.pop('url')
+            user.profile_pic = urls
+
+        if username:
+            user.username = username
+
+        if country:
+            user.country = country
+
+        if description:
+            user.description = description
+
+        if skills:
+            user.skills = skills
+
+        # Save the updated user instance
+        user.save()
+
+        # Serialize the updated data and return the response
+        serializer = ImageSerializer(user,)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 class UserProfileView(APIView):
     
     def get(self, request, user_id):
+        print(request.headers,",.......,,,,,,,,,,>>>>>>>>>>>>>>>>>>>>>>>..")
         
         try:
             user_profile = Userprofile.objects.get(user_id=user_id)
@@ -438,64 +489,113 @@ class UserProfileView(APIView):
 
 
 class UserWorkView(APIView):
-
     def post(self, request):
         user_id = request.data.get('userId')
         work_description = request.data.get('textWritten')
         work_caption = request.data.get('captionEntered')
 
-
-        print(request.data)
-        
-
         try:
             user = UserAccount.objects.get(pk=user_id)
         except UserAccount.DoesNotExist:
             return Response({'error': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
-        
-        print(user,"hello hereeeeeee dont worry")
-        
-    
 
+        print(user, "hello hereeeeeee don't worry")
 
-        
         user_work_serializer = UserWorkSerializer(data={
             'user': user.id,
             'work_description': work_description,
             'work_caption': work_caption
         })
-        
 
         if user_work_serializer.is_valid():
-            
-            user_work_serializer.save()  
- 
-            
-            
+            user_work_serializer.save()
+
             images = request.data.get('selectedimages')
-            
+            print(images, ".............................here")
+
             for image in images:
-                
-
                 result = cloudinary.uploader.upload(image)
-                
-                
                 work_image = result.pop('url')
-                # print(work_image,".............................here")
+                print(work_image, ".............................here")
 
-                # print(user_work_serializer.data,"dataaaaaaaaaaaa,jdfjhbh")
-                
-                work_image_serializer = WorkImageSerializer(data={'user_work': user_work_serializer.instance.id, 'image': work_image})
+                print(user_work_serializer.data, "dataaaaaaaaaaaa,jdfjhbh")
+
+                work_image_serializer = WorkImageSerializer(
+                    data={'user_work': user_work_serializer.instance.id, 'image': work_image}
+                )
                 if work_image_serializer.is_valid():
-
-                    work_image_serializer.save() 
+                    work_image_serializer.save()
                 else:
-                    
+                    print(work_image_serializer.errors)
                     return Response({'error': 'Image upload failed'}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({'message': 'User work and images uploaded successfully'}, status=status.HTTP_201_CREATED)
         else:
+            print(user_work_serializer.errors)
             return Response({'error': 'User work creation failed'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    # def post(self, request):
+    #     user_id = request.data.get('userId')
+    #     work_description = request.data.get('textWritten')
+    #     work_caption = request.data.get('captionEntered')
+
+
+    #     # print(request.data)
+        
+
+    #     try:
+    #         user = UserAccount.objects.get(pk=user_id)
+    #     except UserAccount.DoesNotExist:
+    #         return Response({'error': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
+        
+    #     print(user,"hello hereeeeeee dont worry")
+        
+    
+
+
+        
+    #     user_work_serializer = UserWorkSerializer(data={
+    #         'user': user.id,
+    #         'work_description': work_description,
+    #         'work_caption': work_caption
+    #     })
+        
+
+    #     if user_work_serializer.is_valid():
+    #         print(user_work_serializer,"just testing the error ")
+            
+    #         user_work_serializer.save()  
+
+            
+ 
+            
+            
+    #         images = request.data.get('selectedimages')
+    #         print(images,".............................here")
+            
+    #         for image in images:
+                
+
+    #             result = cloudinary.uploader.upload(image)
+                
+                
+    #             work_image = result.pop('url')
+    #             print(work_image,".............................here")
+
+    #             print(user_work_serializer.data,"dataaaaaaaaaaaa,jdfjhbh")
+                
+    #             work_image_serializer = WorkImageSerializer(data={'user_work': user_work_serializer.instance.id, 'image': work_image})
+    #             if work_image_serializer.is_valid():
+
+    #                 work_image_serializer.save() 
+    #             else:
+                    
+    #                 return Response({'error': 'Image upload failed'}, status=status.HTTP_400_BAD_REQUEST)
+
+    #         return Response({'message': 'User work and images uploaded successfully'}, status=status.HTTP_201_CREATED)
+    #     else:
+    #         return Response({'error': 'User work creation failed'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -524,6 +624,7 @@ class UserWorkView(APIView):
 
 class UserWorksView(APIView):
     def get(self, request, user_id):
+        
         try:
             
             user_works = Userwork.objects.filter(user_id=user_id, is_verified=True)
@@ -533,6 +634,7 @@ class UserWorksView(APIView):
                 raise Http404('No verified user works found')
 
             user_work_serializer = UserWorksSerializer(user_works, many=True)
+            print(user_work_serializer,"this is testing kfnw,fwefkkjwefnkewwefkjnwefewfkjf")
             return Response(user_work_serializer.data, status=status.HTTP_200_OK)
         except Userwork.DoesNotExist:
             return Response({'error': 'User work not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -541,6 +643,7 @@ class UserWorksView(APIView):
 class AdminWorksView(APIView):
     def get(self, request):
         try:
+
             # user_works = Userwork.objects.all()  
             user_works = Userwork.objects.filter(is_verified=False)
             
@@ -571,6 +674,19 @@ class VerifyWorkView(APIView):
 
         
         return Response({'message': 'Work verified successfully'}, status=status.HTTP_200_OK)
+    
+class AllWorksPostedView(APIView):
+    def get(self,request):
+        
+        # user_works = Userwork.objects.filter(is_verified=True)
+        user_works = Userwork.objects.filter(is_verified=True)
+        print(user_works,'efcewvhergvbkwjehrvberwgvhjer')
+
+        print(user_works)
+        serializer = UserWorksSerializer(user_works,many= True)
+
+        
+        return Response(serializer.data)
 
 class RejectWorkView(APIView):
     def post(self, request, work_id):
@@ -580,8 +696,8 @@ class RejectWorkView(APIView):
             return Response({'error': 'Work not found'}, status=status.HTTP_404_NOT_FOUND)
 
         
-        if not request.user.is_superuser:
-            return Response({'error': 'Unauthorized to reject work'}, status=status.HTTP_403_FORBIDDEN)
+        # if not request.user.is_superuser:
+        #     return Response({'error': 'Unauthorized to reject work'}, status=status.HTTP_403_FORBIDDEN)
 
         
         user_work.is_verified = False
@@ -597,16 +713,16 @@ class RejectWorkView(APIView):
 
 class MyInbox(generics.ListAPIView):
       
-      serializer_class = MessageSerializer
+      serializer_class = ChatMessageSerializer
 
       def get_queryset(self):
           user_id = self.kwargs['user_id']
+          
 
-          print(user_id)
-
+          
           messages = ChatMessage.objects.filter(
               id__in = Subquery(
-                  User.objects.filter(
+                  UserAccount.objects.filter(
                       Q(sender__receiver = user_id)|
                       Q(receiver__sender = user_id)
                   ).distinct().annotate(
@@ -619,11 +735,13 @@ class MyInbox(generics.ListAPIView):
                   ).values_list("last_msg",flat=True).order_by("-id")
               )
           ).order_by("-id")
+          print(messages,"..w.wed.wedwedwed.wedwed.we")
           
           return messages
       
 class GetMessages(generics.ListAPIView):
-    serializer_class = ChatMessage
+    # serializer_class = ChatMessage
+    serializer_class = ChatMessageSerializer
 
     def get_queryset(self):
         sender_id = self.kwargs['sender_id']
@@ -643,4 +761,521 @@ class SendMessage(generics.CreateAPIView):
 
 
 
-2
+# @method_decorator(login_required, name='dispatch')
+# class FollowAPIView(APIView):
+#     def get_object(self, user_id):
+#         return get_object_or_404(UserConnection, id=user_id)
+
+#     def get(self, request, user_id, *args, **kwargs):
+#         user_to_toggle = self.get_object(user_id)
+#         user, is_following = request.user.user_connections.get_or_create_follow(user_to_toggle)
+#         serializer = UserConnectionSerializer(user_to_toggle)
+#         return Response({'is_following': is_following, 'user_data': serializer.data})
+
+#     def post(self, request, user_id, *args, **kwargs):
+#         user_to_toggle = self.get_object(user_id)
+#         user, is_following = request.user.user_connections.get_or_create_follow(user_to_toggle)
+        
+#         if is_following:
+#             user.follows.remove(user_to_toggle)
+#         else:
+#             user.follows.add(user_to_toggle)
+
+#         serializer = UserConnectionSerializer(user_to_toggle)
+#         return Response({'is_following': not is_following, 'user_data': serializer.data})
+
+
+
+
+
+
+
+class UserprofileListView(generics.ListAPIView):
+    queryset = Userprofile.objects.all()
+    serializer_class = UserprofilesSerializer
+
+
+
+
+
+# user follow function /////////////////////////////////
+
+
+
+# class UserConnectionListCreateView(generics.ListCreateAPIView):
+#     serializer_class = UserConnectionSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_queryset(self):
+#         return UserConnection.objects.filter(user_account=self.request.user)
+
+#     def perform_create(self, serializer):
+#         serializer.save(user_account=self.request.user)
+
+# class UserConnectionDetailView(generics.RetrieveUpdateDestroyAPIView):
+#     serializer_class = UserConnectionSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_queryset(self):
+#         return UserConnection.objects.filter(user_account=self.request.user)
+
+
+
+
+# class ToggleFollowView(APIView):
+#     def post(self, request, pk, format=None):
+        
+#         other_user = get_object_or_404(User, pk=pk)
+#         print(other_user ,"ewhgewrfvgherfvberwjfbhwerfwqfjwqhfjwfwqjfbwqejfgvweqghfw")
+
+#         if request.user == other_user:
+#             return Response({"detail": "You cannot follow yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         user_connection, created = UserConnection.objects.get_or_create(user_account=request.user)
+        
+#         if other_user in user_connection.follows.all():
+#             user_connection.follows.remove(other_user)
+#             followed = False
+#         else:
+#             user_connection.follows.add(other_user)
+#             followed = True
+
+#         return Response({"followed": followed}, status=status.HTTP_200_OK)
+
+        
+
+
+# class AddFollower(APIView):
+    # permission_classes = [IsAuthenticated ]
+
+    def post(self, request, format=None):
+    
+        
+        user_id = request.data['user_id']
+        follow_id = request.data['follow_id']
+        
+        user_connection = UserConnection.objects.get(pk=user_id)
+       
+        # user_connection = UserConnection.objects.get(user_id=user_id)
+        # user_connection = UserConnection.objects.get(user_account__user_id=user_id)
+        
+        # user_connection = UserConnection.objects.get(user_account__user_id=user_id)
+
+
+
+        print(user_connection,'just testing user')
+        # user_to_follow = UserConnection.objects.get(user_account_id=follow_id)
+        user_to_follow = UserConnection.objects.filter(pk=follow_id)
+        print(user_to_follow,"sdkchsdcjhsdgchjsdcgsducsdjchsdgcys")
+                                                    
+        user_connection.follow_user(user_to_follow)
+        user_connection_serializer = UserConnectionSerializer(user_connection)
+
+        return Response({
+            'status': status.HTTP_200_OK,
+            'data': user_connection_serializer.data,
+            'message': f'User {user_id} is now following {follow_id}'
+        })
+
+
+
+
+class WorksComments(APIView):
+    def post(self,request):
+        
+        data = request.data
+        
+        user_work = data['clickedWork']
+        user_id = data['userId']
+        comments = data['Comments']
+        user_comments = {
+            
+            'user_work':user_work,
+            'user_id':user_id,  
+            'comments':comments,
+        }
+        
+
+        
+
+        serializer = WorkscommentsSerializer(data= user_comments)
+        print(serializer)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(status=status.HTTP_200_OK)
+        
+        else:
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class WorkCommentsView(APIView):
+    def get(self,request,work_id):
+
+        # user_work = Userwork.objects.get(pk=work_id)
+
+        work_id = Userwork.objects.filter(pk = work_id)
+
+        print('sdcbsdjcnkbwcwhwe')
+
+        return Response(status=status.HTTP_200_OK)
+
+        
+
+
+
+# class AppreciateWorkView(APIView):
+#     def post(self, request, work_id):
+#         work = get_object_or_404(Userwork, id=work_id)
+#         user = self.request.user  # Assuming you have user authentication
+#         appreciation, created = WorkAppreciation.objects.get_or_create(user_work=work, user_id=user)
+
+#         if not created:
+#             appreciation.likes += 1
+#             appreciation.save()
+
+#         serializer = WorkAppreciationSerializer(appreciation)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+       
+
+class AppreciateWorkView(APIView):
+    def post(self, request, work_id):
+        work = get_object_or_404(Userwork, id=work_id)
+        
+        print(request.data)
+        
+        user_id = request.data['userId']
+        user = UserAccount.objects.get(id = user_id)
+        print(work,user,"dghkefgthqwfjwehfeguywefgweufgweuy just testing")
+
+        
+        # serializer = WorkAppreciationSerializer(data={'user_work': work.id, 'user_id': user.pk})
+        appreciation_exists = WorkAppreciation.objects.filter(user_work=work, user_id=user).exists()
+
+        if appreciation_exists:
+            
+            WorkAppreciation.objects.filter(user_work=work, user_id=user).delete()
+            action = "deleted"
+        else:
+            
+            appreciation = WorkAppreciation.objects.create(user_work=work, user_id=user)
+            action = "created"
+        
+        
+        # serializer = WorkAppreciationSerializer(appreciation)
+
+        
+        likes_count = WorkAppreciation.objects.filter(user_work=work).count()
+
+        data = {
+            'action': action,
+            # 'appreciation_data': serializer.data,
+            'likes_count': likes_count,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+# class WorkAppreciationView(APIView):
+#     def post(self,request,work_id,user_id):
+    
+class PremiumMembershipView(APIView):
+    def post(self, request):
+        print("hereeee")
+        print(request.data)
+
+
+        serializer = PremiumMembership(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(status=status.HTTP_200_OK)
+    
+        
+        else:
+            print(serializer.errors)
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AllPremiumMembershipsView(APIView):
+    def get(self, request):
+        premium_memberships = PremiumMembershipModel.objects.all()
+        serializer = PremiumMembership(premium_memberships, many=True)
+        return Response(serializer.data)
+
+
+@api_view(['POST'])
+
+def create_razorpay_order(request):
+    print("here the",request.data)
+    request_id=request.data.get("id")
+    print("here giving the request_id",request_id)
+
+    premium_selected = PremiumMembershipModel.objects.get(id=request_id)
+    print("print the premium selected",premium_selected)
+    
+
+    client = razorpay.Client(auth=('rzp_test_TpsHVKhrkZuIUJ', 'OJzAGp6Vqx8yu2qgeHhz4y3o'))
+
+    order_amount = int(premium_selected.price )*100
+    order_currency = 'INR'
+
+    order_params = { 
+        'amount': order_amount,
+        'currency': order_currency,
+        'payment_capture': '1',
+    }
+
+    razorpay_order = client.order.create(order_params)
+    order_id = razorpay_order['id']
+    print("razopay",razorpay_order)
+
+    return Response({'order_id': order_id, 'order_amount': order_amount})
+
+
+class TransactionAPIView(APIView):
+    
+    def post(self, request):
+        print("here giving theseezezzwawaw",request.data)
+        userid=request.data.get("user_id")
+        premiumid = request.data.get("premium_selected")
+        print("####################",userid)
+        print("*********************",premiumid)
+        
+
+        #request_id=request.data.get("id")
+        user = UserAccount.objects.get(id = userid)
+        #premium_selected = PremiumMembershipModel.objects.get(id = premiumid )
+
+        print(userid,premiumid,"dkhjcgwkuhjgwefjhwegfkhjw  ju>>>>>>")
+
+        data = request.data
+        print("##############$$$@@@@@@@@@@@@@$$$$$$$$$$###############",user.id)
+        data["user_id"] = user.id
+        # data["premium_selected"] = premium_selected
+
+        print(data,"just testing ")
+
+        transaction_serializer = TransactionSerializer(data=data)
+        print("here giving the data ",request.data)
+        print("it will give the serializer seiaki==@@@@@@@@@@@@@@@@@@@@@@@@@@#########!@!##@$%%%",transaction_serializer)
+        if transaction_serializer.is_valid():
+            print("true")
+            
+            # print("here the ride request",ridid)
+            
+            
+            
+            rz_client.verify_payment_signature(
+                razorpay_payment_id = transaction_serializer.validated_data.get("payment_id"),
+                razorpay_order_id = transaction_serializer.validated_data.get("order_id"),
+                razorpay_signature = transaction_serializer.validated_data.get("signature")
+            )
+            transaction_serializer.save()
+
+            premium_user = Userprofile.objects.get(user_id = user.id)
+            premium_user.premium_member = True 
+            premium_user.save()
+
+            print(premium_user)
+
+            response = {
+                "status_code": status.HTTP_201_CREATED,
+                "message": "transaction created"
+            }
+            return Response(response, status=status.HTTP_201_CREATED)
+        else:
+    
+            response = {
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "bad request",
+                "error": transaction_serializer.errors
+            }
+            print("here giving the error",transaction_serializer.errors)
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+
+# class TransactionAPIView(APIView):
+    
+#     def post(self, request):
+#         print("here giving", request.data)
+#         user = request.data.get("user_id")
+#         print(user)
+#         request_id = request.data.get("id")
+
+#         transaction_serializer = TransactionSerializer(data=request.data)
+#         print("here giving the data ", request.data)
+#         print("it will give the serializer seiaki==@@@@@@@@@@@@@@@@@@@@@@@@@@#########!@!##@$%%%", transaction_serializer)
+#         if transaction_serializer.is_valid():
+#             print("true")
+            
+#             rz_client.utility.verify_payment_signature(
+#                 razorpay_payment_id=transaction_serializer.validated_data.get("payment_id"),
+#                 razorpay_order_id=transaction_serializer.validated_data.get("order_id"),
+#                 razorpay_signature=transaction_serializer.validated_data.get("signature")
+#             )
+#             transaction_serializer.save()
+#             response = {
+#                 "status_code": status.HTTP_201_CREATED,
+#                 "message": "transaction created"
+#             }
+#             return Response(response, status=status.HTTP_201_CREATED)
+#         else:
+#             response = {
+#                 "status_code": status.HTTP_400_BAD_REQUEST,
+#                 "message": "bad request",
+#                 "error": transaction_serializer.errors
+#             }
+#             print("here giving the error")
+#             return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class FollowUserView(APIView):
+    
+
+    def post(self, request, user_account_id):
+        user_to_follow = get_object_or_404(UserConnection, id=user_account_id)
+        # user_connection, created = UserConnection.objects.get_or_create(user_account=request.user)
+
+        print(request.data,"just testing for moreee")
+        user_account = request.data['userId']
+        
+        # user_connection,  = UserConnection.objects.get_or_create(user_account=user_account)
+        # print(user_connection)
+
+
+        
+        user_obj = get_object_or_404(UserAccount,id = user_account)
+        print(user_obj)
+        user = get_object_or_404(UserConnection,user_account = user_account)
+        print(user)
+        # user, created = UserConnection.objects.get_or_create(user_account=user_account)
+
+        # user_connection = get_or_create_user_connection(user_obj)
+        
+        print(user,user_account)
+
+        # Check if the user is already following, then unfollow
+        if user.follows.filter(pk=user_to_follow.user_account.pk).exists():
+            user.unfollow_user(user_to_follow)
+            action = "unfollowed"
+        else:
+            user.follow_user(user_to_follow)
+            action = "followed"
+        
+        following_users = user.follows.all()
+        following_user_ids = [user.id for user in following_users]
+        print(following_user_ids,"mdscghjcvhgferyfghwfvhgrqegfwhfbrjfgurjfbreufgerjfeugryfer")
+
+        # serializer = UserConnectionSerializer(user_account)
+        
+        data = {
+            'action': action,
+            'following_users': following_user_ids
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+    
+    def get(self,request,user_id):
+        print(request.data,"ndvewhgsfgjysehfwjfwgfyjwfwjfyurfvgeyruh")
+        # user_account = request.data['userId']
+        user = get_object_or_404(UserConnection,user_account = user_id)
+
+        following_users = user.follows.all()
+        following_user_ids = [user.id for user in following_users]
+        print(following_user_ids,"Just testing the get method")
+
+        data = {
+            'following_users': following_user_ids
+        }
+        return Response(data, status=status.HTTP_200_OK)
+        
+
+
+# class Get_User(APIView):
+#     def get(self, request, user_account_id):
+#         user = get_object_or_404(UserAccount, id=user_account_id)
+
+#         # Get all messages sent to or received by the user
+#         user_messages = ChatMessage.objects.filter(
+#         Q(sender=user) | Q(receiver=user)
+#     ).values('sender', 'receiver').distinct()
+#         senders = UserAccount.objects.filter(id__in=user_messages.values_list('sender', flat=True))
+#         receivers = UserAccount.objects.filter(id__in=user_messages.values_list('receiver', flat=True))
+
+#         # Example: Combine sender and receiver information in a list of dictionaries
+#         user_messages_info = [
+#             {'sender': sender.id,  'receiver': receiver.id}
+#             for sender, receiver in zip(senders, receivers)
+#         ]
+#         # user_messages_info = {(sender.id, receiver.id) for sender, receiver in zip(senders, receivers)}
+#         print(user_messages_info,'vegerferbfreghjfgrfhjgkwbfjhkrefgurykfgryeufhjbrekfgreuyf')
+#         serializer = ChatMessageSerializer(user_messages_info, many=True)
+#         return Response(serializer.data)
+    
+class Get_User(APIView):
+    def get(self, request, user_account_id):
+        user = get_object_or_404(UserAccount, id=user_account_id)
+
+        # Get the sender and receiver information for all messages sent to or received by the user
+        user_messages = ChatMessage.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).values('sender', 'receiver').distinct()
+
+        
+        user_ids = list(set(user_messages.values_list('sender', flat=True)) | set(user_messages.values_list('receiver', flat=True)))
+
+        
+        user_ids.remove(user.id)
+
+        # Fetch the UserAccount instances for the remaining user IDs
+        other_users = UserAccount.objects.filter(id__in=user_ids)
+       
+        print(other_users,">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        
+
+
+        # Serialize the other_users and return as a response
+
+        # for user_id in all_user_ids:
+        serializer = UserMessageprofileSerializer(other_users, many=True)
+            
+       
+        
+        return Response(serializer.data)
+    
+
+
+class FollowWorksPostedView(APIView):
+    
+    def get(self, request,user_id):
+        
+        # user_id = request.data['userId']
+
+        user_id = get_object_or_404(UserConnection, pk=user_id)
+        
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        
+        print(user_id,'svghjgfyrefbergferjbg')
+
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+       
+    
+        following_users = user_id.user_connections.all()
+
+        
+
+        user_works = Userwork.objects.filter(user__in=following_users, is_verified=True)
+
+        
+
+        serializer = UserWorksSerializer(user_works, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
