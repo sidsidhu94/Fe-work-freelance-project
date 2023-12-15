@@ -115,7 +115,7 @@ class UserprofileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Userprofile
-        fields = ['user_id','profile_pic', 'username', 'country', 'description', 'skills']
+        fields = ['user_id','profile_pic', 'username', 'country', 'description', 'skills','premium_member']
 
     def get_profile_pic(self,obj):
         return str(obj.profile_pic)
@@ -248,14 +248,32 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         fields = ['id', 'sender', 'receiver', 'content', 'timestamp','sender_profile','receiver_profile']
 
     def get_sender_profile(self, obj):
-        sender_profile = Userprofile.objects.get(user_id=obj.sender_id)
-        serializer = UserprofileSerializer(sender_profile)
-        return serializer.data
-    
+        try:
+            sender_profile = Userprofile.objects.get(user_id=obj.sender_id)
+            serializer = UserprofileSerializer(sender_profile)
+            return serializer.data
+        except Userprofile.DoesNotExist:
+            # Handle the case where the sender profile does not exist
+            return {'user_id': obj.sender_id, 'error': 'Profile not found'}
+
     def get_receiver_profile(self, obj):
-        receiver_profile = Userprofile.objects.get(user_id=obj.receiver_id)
-        serializer = UserprofileSerializer(receiver_profile)
-        return serializer.data
+        try:
+            receiver_profile = Userprofile.objects.get(user_id=obj.receiver_id)
+            serializer = UserprofileSerializer(receiver_profile)
+            return serializer.data
+        except Userprofile.DoesNotExist:
+            # Handle the case where the receiver profile does not exist
+            return {'user_id': obj.receiver_id, 'error': 'Profile not found'}
+
+    # def get_sender_profile(self, obj):
+    #     sender_profile = Userprofile.objects.get(user_id=obj.sender_id)
+    #     serializer = UserprofileSerializer(sender_profile)
+    #     return serializer.data
+    
+    # def get_receiver_profile(self, obj):
+    #     receiver_profile = Userprofile.objects.get(user_id=obj.receiver_id)
+    #     serializer = UserprofileSerializer(receiver_profile)
+    #     return serializer.data
 
 
 # class MessageSerializer(serializers.ModelSerializer):

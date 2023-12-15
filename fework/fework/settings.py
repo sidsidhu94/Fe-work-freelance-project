@@ -91,7 +91,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'fework.wsgi.application'
+ASGI_APPLICATION = "fework.asgi.application"
+# WSGI_APPLICATION = 'fework.wsgi.application'
 
 
 # Database
@@ -204,7 +205,7 @@ cloudinary.config(
     api_secret = "MIiDfoEibAFOGriqIKNAPoXCFK0",
 )
 
-ASGI_APPLICATION = "fework.asgi.application"
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
