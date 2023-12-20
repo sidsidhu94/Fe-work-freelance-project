@@ -32,12 +32,12 @@ rz_client = RazorpayClient()
 import smtplib
 from email.message import EmailMessage
 
-from .models import UserAccount,Userprofile,Userwork,ChatMessage,UserConnection,WorkAppreciation
+from .models import UserAccount,Userprofile,Userwork,ChatMessage,UserConnection,WorkAppreciation,Jobs,Payment
 from .models import PremiumMembership as PremiumMembershipModel
 
 User = UserAccount
 
-from .serializer import  UserCreateSerializer, UserSerializer,OTPVerificationSerializer,ImageSerializer,UserprofileSerializer,ChatMessageSerializer,WorkAppreciationSerializer,TransactionSerializer
+from .serializer import  UserCreateSerializer, UserSerializer,OTPVerificationSerializer,ImageSerializer,UserprofileSerializer,ChatMessageSerializer,WorkAppreciationSerializer,TransactionSerializer,UserJobSerializer
 
 from .serializer import UserWorkSerializer,WorkImageSerializer,UserWorksSerializer,MessageSerializer,UserConnectionSerializer,UserprofilesSerializer,WorkscommentsSerializer,PremiumMembership,UserMessageprofileSerializer
 # from .serializer import ,UserAccountSerializer
@@ -199,6 +199,7 @@ class LoginUser(APIView):
             'message' : "userlogin",
             "username" : user.firstname +" " + user.lastname,
             "user_id" : user.id
+            
             
         }
 
@@ -1061,7 +1062,7 @@ class TransactionAPIView(APIView):
         print("here giving the data ",request.data)
         print("it will give the serializer seiaki==@@@@@@@@@@@@@@@@@@@@@@@@@@#########!@!##@$%%%",transaction_serializer)
         if transaction_serializer.is_valid():
-            print("true")
+            
             
             # print("here the ride request",ridid)
             
@@ -1280,3 +1281,69 @@ class FollowWorksPostedView(APIView):
 
         serializer = UserWorksSerializer(user_works, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class JobPosting(APIView):
+
+    def post(self,request,user_id):
+
+        print(">>>>>>>>>>>>>>>>>>")
+        print(user_id)
+        user = UserAccount.objects.get(id = user_id)
+        data = {
+            "user_id" : user_id,
+            "jobcaption" : request.data['jobCaption'],
+            "requirements" : request.data['requirements'],
+            "experiance" : request.data['experiance'],
+            "jobdescription" : request.data['JobDescription'],
+        }
+
+
+
+        print(data)
+
+        serializer = UserJobSerializer(data = data)
+
+        print(serializer)
+        
+
+        if serializer.is_valid():
+            serializer.save()
+            print("success")
+            return Response(status = status.HTTP_201_CREATED)
+        
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        
+
+    def get(self, request, user_id):
+        try:
+            
+            job_postings = Jobs.objects.filter(user_id=user_id)
+            serializer = UserJobSerializer(job_postings, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UserAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+            
+
+
+class AllJobsPosted(APIView):
+    def get(self, request):
+        
+        job_postings = Jobs.objects.all()
+        serializer = UserJobSerializer(job_postings, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+
+
+
+class Total(APIView):
+    def get(self, request, *args, **kwargs):
+        total_premium_paid = Payment.get_total_premium_paid()
+        daily_premium = Payment.get_daily_premium()
+
+        # Rest of your view logic
+
+        data = {'total_premium_paid': total_premium_paid, 'daily_premium': daily_premium}
+        return Response(data)
+        

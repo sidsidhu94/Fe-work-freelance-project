@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions
-from .models import UserAccount,Userprofile,Userwork,Workimage,ChatMessage,UserConnection,Workscomments,WorkAppreciation,PremiumMembership, Payment
+from .models import UserAccount,Userprofile,Userwork,Workimage,ChatMessage,UserConnection,Workscomments,WorkAppreciation,PremiumMembership, Payment,Jobs
 
 User = UserAccount
 from django.contrib.auth import authenticate
@@ -369,14 +369,14 @@ class PremiumMembership(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
 
-    # userdetail = UserSerializer("user_id")
-    # premium_detail = PremiumMembership("premium_selected")
-
-    
     class Meta:
         model = Payment
-        # fields = ["user_id","userdetail","amount","payment_status","payment_id","order_id","signature","timestamp","premium_selected","premium_detail"]
+       
         fields = "__all__"
+
+    def create(self, validated_data):
+        validated_data['payment_status'] = True
+        return super().create(validated_data)
 
 class UserMessageprofileSerializer(serializers.ModelSerializer):
     # profile_pic = serializers.SerializerMethodField()
@@ -395,5 +395,18 @@ class UserMessageprofileSerializer(serializers.ModelSerializer):
     
     def get_user_profile(self, obj):
         user_profile = Userprofile.objects.get(user_id=obj.id)
+        serializer = UserprofileSerializer(user_profile)
+        return serializer.data
+    
+
+class UserJobSerializer(serializers.ModelSerializer):
+    user_profile = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Jobs
+        fields = ["user_id","jobcaption","requirements","experiance","jobdescription","user_profile"]
+
+    def get_user_profile(self, obj):
+        user_profile = Userprofile.objects.get(user_id=obj.user_id)
         serializer = UserprofileSerializer(user_profile)
         return serializer.data

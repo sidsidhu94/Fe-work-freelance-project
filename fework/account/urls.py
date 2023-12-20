@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import RegisterView,LoginUser,LoginAdmin,VerifyOtpView,UserLogoutView,UserView,RemoveUser,EditUser,AddUser,LogoutView,ProfileView
-from .views import UserProfileView,UserWorkView,UserWorksView,MyInbox,GetMessages,SendMessage,AdminWorksView,VerifyWorkView,RejectWorkView,UserprofileListView,AllWorksPostedView
+from .views import RegisterView,LoginUser,LoginAdmin,VerifyOtpView,UserLogoutView,UserView,RemoveUser,EditUser,AddUser,LogoutView,ProfileView,Total
+from .views import UserProfileView,UserWorkView,UserWorksView,MyInbox,GetMessages,SendMessage,AdminWorksView,VerifyWorkView,RejectWorkView,UserprofileListView,AllWorksPostedView,JobPosting,AllJobsPosted
 from .views import WorksComments,WorkCommentsView,AppreciateWorkView,PremiumMembershipView,AllPremiumMembershipsView,TransactionAPIView,create_razorpay_order,FollowUserView,Get_User,FollowWorksPostedView
 
 urlpatterns = [
@@ -65,6 +65,12 @@ urlpatterns = [
 
     path('user-messages/<int:user_account_id>/', Get_User.as_view(), name='user-messages'),
 
+
+    path('post_job/<int:user_id>/',JobPosting.as_view(),name='post_work'),
+    path('posted_jobs/',AllJobsPosted.as_view(),name='post'),
+
+
+    path('total_premium/', Total.as_view(), name='some-view'),
     
 
 

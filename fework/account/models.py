@@ -282,3 +282,29 @@ class Payment(models.Model):
 
     def _str_(self):
         return f"Payment #{self.id} for premium #{self.Premium_id}"
+    
+    
+    @classmethod
+    def get_total_premium_paid(cls):
+        """
+        Get the total premium paid across all users.
+        """
+        total_premium = cls.objects.filter(payment_status=True).aggregate(models.Sum('amount'))['amount__sum']
+        return total_premium if total_premium is not None else 0
+
+    @classmethod
+    def get_daily_premium(cls):
+        """
+        Get the daily premium paid across all users.
+        """
+        today = timezone.now().date()
+        daily_premium = cls.objects.filter(payment_status=True, timestamp__date=today).aggregate(models.Sum('amount'))['amount__sum']
+        return daily_premium if daily_premium is not None else 0
+
+class Jobs(models.Model):
+    user_id = models.ForeignKey(UserAccount,on_delete=models.CASCADE)
+    jobcaption = models.CharField(max_length = 255,null = False)
+    requirements =  models.CharField(max_length = 255, null = False)
+    experiance = models.CharField(max_length = 255, null= False)
+    jobdescription =  models.CharField(max_length = 255,null = False)
+    
