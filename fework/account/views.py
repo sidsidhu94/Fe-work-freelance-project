@@ -1229,7 +1229,7 @@ class Get_User(APIView):
         user_ids = list(set(user_messages.values_list('sender', flat=True)) | set(user_messages.values_list('receiver', flat=True)))
 
         
-        user_ids.remove(user.id)
+        # user_ids.remove(user.id)
 
         # Fetch the UserAccount instances for the remaining user IDs
         other_users = UserAccount.objects.filter(id__in=user_ids)
