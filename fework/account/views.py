@@ -925,19 +925,6 @@ class WorkCommentsView(APIView):
         
 
 
-
-# class AppreciateWorkView(APIView):
-#     def post(self, request, work_id):
-#         work = get_object_or_404(Userwork, id=work_id)
-#         user = self.request.user  # Assuming you have user authentication
-#         appreciation, created = WorkAppreciation.objects.get_or_create(user_work=work, user_id=user)
-
-#         if not created:
-#             appreciation.likes += 1
-#             appreciation.save()
-
-#         serializer = WorkAppreciationSerializer(appreciation)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
        
 
 class AppreciateWorkView(APIView):
@@ -1228,8 +1215,8 @@ class Get_User(APIView):
         
         user_ids = list(set(user_messages.values_list('sender', flat=True)) | set(user_messages.values_list('receiver', flat=True)))
 
-        
-        # user_ids.remove(user.id)
+        # just before hosing
+        user_ids.remove(user.id)
 
         # Fetch the UserAccount instances for the remaining user IDs
         other_users = UserAccount.objects.filter(id__in=user_ids)
