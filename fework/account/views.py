@@ -1122,49 +1122,36 @@ class TransactionAPIView(APIView):
 
 class FollowUserView(APIView):
     
-
     def post(self, request, user_account_id):
-        user_to_follow = get_object_or_404(UserConnection, id=user_account_id)
-        # user_connection, created = UserConnection.objects.get_or_create(user_account=request.user)
+        print("here")
+        print(request.data, "just testing for moreee")
 
-        print(request.data,"just testing for moreee")
-        user_account = request.data['userId']
-        
-        # user_connection,  = UserConnection.objects.get_or_create(user_account=user_account)
-        # print(user_connection)
+        # Get the UserAccount instance to follow/unfollow
+        user_to_follow = get_object_or_404(UserConnection, user_account_id=user_account_id)
 
-
-        
-        user_obj = get_object_or_404(UserAccount,id = user_account)
-        print(user_obj)
-        user = get_object_or_404(UserConnection,user_account = user_account)
-        print(user)
-        # user, created = UserConnection.objects.get_or_create(user_account=user_account)
-
-        # user_connection = get_or_create_user_connection(user_obj)
-        
-        print(user,user_account)
+        # Get the UserConnection instance for the current user (assuming you have a way to determine the current user)
+        user = request.data.get('userId')
+        current_user_connection = get_object_or_404(UserConnection, user_account=user)
 
         # Check if the user is already following, then unfollow
-        if user.follows.filter(pk=user_to_follow.user_account.pk).exists():
-            user.unfollow_user(user_to_follow)
+        if current_user_connection.follows.filter(pk=user_to_follow.pk).exists():
+            current_user_connection.unfollow_user(user_to_follow)
             action = "unfollowed"
         else:
-            user.follow_user(user_to_follow)
+            current_user_connection.follow_user(user_to_follow)
             action = "followed"
         
-        following_users = user.follows.all()
+        following_users = current_user_connection.follows.all()
         following_user_ids = [user.id for user in following_users]
-        print(following_user_ids,"mdscghjcvhgferyfghwfvhgrqegfwhfbrjfgurjfbreufgerjfeugryfer")
+        print(following_user_ids, "mdscghjcvhgferyfghwfvhgrqegfwhfbrjfgurjfbreufgerjfeugryfer")
 
-        # serializer = UserConnectionSerializer(user_account)
-        
         data = {
             'action': action,
             'following_users': following_user_ids
         }
 
         return Response(data, status=status.HTTP_200_OK)
+
     
     def get(self,request,user_id):
         print(request.data,"ndvewhgsfgjysehfwjfwgfyjwfwjfyurfvgeyruh")

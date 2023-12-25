@@ -8,6 +8,10 @@ import cloudinary
 import cloudinary.uploader
 from django.utils import timezone
 
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
 
 # Create your models here.
 
@@ -230,6 +234,16 @@ class UserConnection(models.Model):
             'count': following.count(),
             'details': following
         }
+    # def follow_user(self, user_to_follow):
+    #     if not self.follows.filter(pk=user_to_follow).exists():
+    #         self.follows.add(user_to_follow)
+    #         self.save()
+
+    # def unfollow_user(self, user_to_unfollow):
+    #     if self.follows.filter(pk=user_to_unfollow).exists():
+    #         self.follows.remove(user_to_unfollow)
+    #         self.save()
+  
 
     def follow_user(self, user_to_follow):
         if not self.follows.filter(pk=user_to_follow.user_account.pk).exists():
@@ -240,6 +254,19 @@ class UserConnection(models.Model):
         if self.follows.filter(pk=user_to_unfollow.user_account.pk).exists():
             self.follows.remove(user_to_unfollow)
             self.save()
+
+# just for testing ############################
+# just for testing ############################
+            
+@receiver(post_save, sender=UserAccount)
+def create_user_connection(sender, instance, created, **kwargs):
+    """
+    Signal handler to create a UserConnection instance for every new UserAccount.
+    """
+    if created:
+        UserConnection.objects.create(user_account=instance)        
+# just for testing ############################
+# just for testing ############################
 
 # to this 
 # class UserConnection(models.Model):
