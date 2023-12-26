@@ -1129,20 +1129,25 @@ class FollowUserView(APIView):
         # Get the UserAccount instance to follow/unfollow
         user_to_follow = get_object_or_404(UserConnection, user_account_id=user_account_id)
 
+        print(user_to_follow.id,"sddfdfs")
+
         # Get the UserConnection instance for the current user (assuming you have a way to determine the current user)
         user = request.data.get('userId')
         current_user_connection = get_object_or_404(UserConnection, user_account=user)
 
         # Check if the user is already following, then unfollow
-        if current_user_connection.follows.filter(pk=user_to_follow.pk).exists():
+        if current_user_connection.follows.filter(pk=user_to_follow.id).exists():
+            print("00000")
             current_user_connection.unfollow_user(user_to_follow)
             action = "unfollowed"
         else:
+            print("121223")
             current_user_connection.follow_user(user_to_follow)
             action = "followed"
         
         following_users = current_user_connection.follows.all()
-        following_user_ids = [user.id for user in following_users]
+        print(following_users)
+        following_user_ids = [user.user_account_id for user in following_users]
         print(following_user_ids, "mdscghjcvhgferyfghwfvhgrqegfwhfbrjfgurjfbreufgerjfeugryfer")
 
         data = {
@@ -1159,7 +1164,7 @@ class FollowUserView(APIView):
         user = get_object_or_404(UserConnection,user_account = user_id)
 
         following_users = user.follows.all()
-        following_user_ids = [user.id for user in following_users]
+        following_user_ids = [user.user_account_id for user in following_users]
         print(following_user_ids,"Just testing the get method")
 
         data = {

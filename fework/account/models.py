@@ -246,12 +246,14 @@ class UserConnection(models.Model):
   
 
     def follow_user(self, user_to_follow):
-        if not self.follows.filter(pk=user_to_follow.user_account.pk).exists():
+        print(user_to_follow,"--------------------")
+        if not self.follows.filter(pk=user_to_follow.id).exists():
             self.follows.add(user_to_follow)
             self.save()
 
     def unfollow_user(self, user_to_unfollow):
-        if self.follows.filter(pk=user_to_unfollow.user_account.pk).exists():
+        print(user_to_unfollow,"----------------1")
+        if self.follows.filter(pk=user_to_unfollow.id).exists():
             self.follows.remove(user_to_unfollow)
             self.save()
 
